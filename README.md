@@ -1,4 +1,4 @@
-# SecureMCP
+# Secure-MCP
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python Version](https://img.shields.io/pypi/pyversions/secure-mcp.svg)](https://pypi.org/project/secure-mcp/)

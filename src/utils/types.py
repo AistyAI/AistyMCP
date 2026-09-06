@@ -58,6 +58,7 @@ class ToolMetadata:
         access_type: Default access type ("read", "write", "execute").
         required_permissions: Set of permission names needed to use this tool.
         is_destructive: Whether the tool modifies state.
+        reverses_tool: Name of the tool that reverses this action (optional).
     """
 
     def __init__(
@@ -68,6 +69,7 @@ class ToolMetadata:
         access_type: str = "execute",
         required_permissions: Optional[Set[str]] = None,
         is_destructive: bool = False,
+        reverses_tool: Optional[str] = None,
     ):
         from .validation import validate_tool_name
         validate_tool_name(tool_name)
@@ -77,3 +79,4 @@ class ToolMetadata:
         self.access_type = access_type
         self.required_permissions = required_permissions or set()
         self.is_destructive = is_destructive
+        self.reverses_tool = reverses_tool

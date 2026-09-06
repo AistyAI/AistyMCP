@@ -1,0 +1,2 @@
+[console_scripts]
+secure-mcp = src:main

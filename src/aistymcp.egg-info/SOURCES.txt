@@ -1,0 +1,11 @@
+LICENSE
+README.md
+pyproject.toml
+src/aistymcp.egg-info/PKG-INFO
+src/aistymcp.egg-info/SOURCES.txt
+src/aistymcp.egg-info/dependency_links.txt
+src/aistymcp.egg-info/entry_points.txt
+src/aistymcp.egg-info/top_level.txt
+tests/test_access_control.py
+tests/test_permission_model.py
+tests/test_tool_registry.py

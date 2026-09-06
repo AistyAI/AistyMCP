@@ -1,0 +1,14 @@
+Metadata-Version: 2.1
+Name: secure-mcp
+Version: 1.0.0
+Summary: Fine-grained permission control for Model Context Protocol (MCP) servers with reversible action support
+Author-email: SecureMCP Contributors <joe@example.com>
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Operating System :: OS Independent
+License-File: LICENSE

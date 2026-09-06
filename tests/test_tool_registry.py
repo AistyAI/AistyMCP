@@ -188,3 +188,22 @@ class TestToolMetadata:
             required_permissions={"read:data"},
         )
         assert meta.required_permissions == {"read:data"}
+
+    def test_metadata_with_reversible(self):
+        """Create ToolMetadata with reversible tool."""
+        meta = ToolMetadata(
+            tool_name="jira_add_comment",
+            description="Add comment to Jira ticket",
+            function=lambda: None,
+            reverses_tool="jira_remove_comment",
+        )
+        assert meta.reverses_tool == "jira_remove_comment"
+
+    def test_metadata_without_reversible(self):
+        """Create ToolMetadata without reversible tool."""
+        meta = ToolMetadata(
+            tool_name="search",
+            description="Search tool",
+            function=lambda: None,
+        )
+        assert meta.reverses_tool is None

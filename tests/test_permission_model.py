@@ -234,3 +234,66 @@ class TestPermissionModel:
         # Nonexistent tool
         result = self.pm.get_tool_metadata("nonexistent")
         assert result is None
+
+    def test_has_permission_with_reversible(self):
+        """Has permission checks reversible tool relationship."""
+        from src.utils.types import ToolMetadata
+
+        # Register tools with reversible relationship
+        add_comment = ToolMetadata(
+            tool_name="jira_add_comment",
+            description="Add comment to Jira ticket",
+            function=lambda: None,
+            reverses_tool="jira_remove_comment",
+        )
+        remove_comment = ToolMetadata(
+            tool_name="jira_remove_comment",
+            description="Remove comment from Jira ticket",
+            function=lambda: None,
+            reverses_tool="jira_add_comment",
+        )
+
+        self.pm.register_tool(add_comment)
+        self.pm.register_tool(remove_comment)
+
+        # Add permissions for both tools
+        perms = [
+            Permission(tool_name="jira_add_comment", function="add", access_type="write"),
+            Permission(tool_name="jira_remove_comment", function="remove", access_type="write"),
+        ]
+        ps = PermissionSet(name="analyst", permissions=perms, description="Analyst role")
+        self.pm.register_permission_set(ps)
+
+        # User with analyst role should have permission for both tools
+        assert self.pm.has_permission("analyst", "jira_add_comment") is True
+        assert self.pm.has_permission("analyst", "jira_remove_comment") is True
+
+    def test_has_permission_reversible_without_permission(self):
+        """Has permission fails if reversible tool lacks permission."""
+        from src.utils.types import ToolMetadata
+
+        # Register tools with reversible relationship
+        add_comment = ToolMetadata(
+            tool_name="jira_add_comment",
+            description="Add comment to Jira ticket",
+            function=lambda: None,
+            reverses_tool="jira_remove_comment",
+        )
+        remove_comment = ToolMetadata(
+            tool_name="jira_remove_comment",
+            description="Remove comment from Jira ticket",
+            function=lambda: None,
+        )
+
+        self.pm.register_tool(add_comment)
+        self.pm.register_tool(remove_comment)
+
+        # Only add permission for add_comment, not remove_comment
+        perms = [
+            Permission(tool_name="jira_add_comment", function="add", access_type="write"),
+        ]
+        ps = PermissionSet(name="analyst", permissions=perms, description="Analyst role")
+        self.pm.register_permission_set(ps)
+
+        # User should NOT have permission for add_comment since reversible tool lacks permission
+        assert self.pm.has_permission("analyst", "jira_add_comment") is False

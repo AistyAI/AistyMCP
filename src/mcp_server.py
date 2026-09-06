@@ -49,6 +49,7 @@ class MCPServer:
         description: str = "",
         access_type: str = "execute",
         is_destructive: bool = False,
+        reverses_tool: Optional[str] = None,
     ) -> ToolWrapper:
         """Register and wrap a tool with access control.
 
@@ -62,6 +63,7 @@ class MCPServer:
             description: Description of the tool.
             access_type: Type of access ("read", "write", "execute").
             is_destructive: Whether the tool modifies state.
+            reverses_tool: Name of the tool that reverses this action.
 
         Returns:
             ToolWrapper instance that enforces permission checks.
@@ -75,6 +77,7 @@ class MCPServer:
             access_type=access_type,
             required_permissions=required_permissions or set(),
             is_destructive=is_destructive,
+            reverses_tool=reverses_tool,
         )
 
         self.tr.register(meta)

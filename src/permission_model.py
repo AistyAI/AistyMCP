@@ -19,6 +19,7 @@ class PermissionModel:
     def __init__(self):
         self._permission_sets: Dict[str, PermissionSetCls] = {}
         self._tool_registry: Dict[str, "ToolMetadata"] = {}
+        self._reversible_map: Dict[str, str] = {}  # tool_name -> reverses_tool_name
 
     def register_permission_set(self, perm_set: PermissionSetCls) -> None:
         """Register a permission set with the model.
@@ -36,6 +37,13 @@ class PermissionModel:
         """
         self._tool_registry[tool_meta.tool_name] = tool_meta
 
+        # Track reversible relationship if specified
+        if tool_meta.reverses_tool:
+            self._reversible_map[tool_meta.tool_name] = tool_meta.reverses_tool
+            # Also register the reverse direction
+            if tool_meta.reverses_tool not in self._reversible_map:
+                self._reversible_map[tool_meta.reverses_tool] = tool_meta.tool_name
+
     def has_permission(
         self,
         user_perm_set_name: str,
@@ -45,6 +53,9 @@ class PermissionModel:
         """Check if a user's permission set allows calling a tool.
 
         Deny-by-default: returns False if no explicit permission found.
+
+        Also checks reversible tool relationships - if a tool reverses
+        another tool, permission for one implies access to the reversible.
 
         Args:
             user_perm_set_name: Name of the user's permission set.
@@ -76,6 +87,22 @@ class PermissionModel:
         # Check constraints if present
         if tool_perm.constraints:
             if not self._check_constraints(tool_perm.constraints):
+                return False
+
+        # Check reversible tool relationship
+        reverses_tool = self._reversible_map.get(tool_name)
+        print(f"DEBUG: tool_name={tool_name}, reverses_tool={reverses_tool}, perm_set.permissions={[(p.tool_name, p.function) for p in perm_set.permissions]}")
+        if reverses_tool:
+            # If this tool has a reversible, also check if the reversible
+            # tool is in the permission set
+            rev_perm = None
+            for perm in perm_set.permissions:
+                if perm.tool_name == reverses_tool:
+                    rev_perm = perm
+                    break
+            print(f"DEBUG: rev_perm={rev_perm}")
+            if rev_perm is None:
+                # User doesn't have permission for the reversible tool
                 return False
 
         return True

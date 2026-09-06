@@ -140,6 +140,90 @@ class TestAccessControlMiddleware:
         assert "tool1" in composite
         assert "tool2" not in composite  # Not allowed
 
+    def test_reversible_tool_permission(self):
+        """Reversible tool permission check works correctly."""
+        from src.utils.types import ToolMetadata
+
+        # Register tools with reversible relationship
+        add_comment = ToolMetadata(
+            tool_name="jira_add_comment",
+            description="Add comment to Jira ticket",
+            function=lambda: None,
+            reverses_tool="jira_remove_comment",
+        )
+        remove_comment = ToolMetadata(
+            tool_name="jira_remove_comment",
+            description="Remove comment from Jira ticket",
+            function=lambda: None,
+            reverses_tool="jira_add_comment",
+        )
+
+        self.tr.register(add_comment)
+        self.tr.register(remove_comment)
+
+        # Add permissions for both tools
+        perms = [
+            Permission(tool_name="jira_add_comment", function="add", access_type="write"),
+            Permission(tool_name="jira_remove_comment", function="remove", access_type="write"),
+        ]
+        ps = PermissionSet(name="analyst", permissions=perms, description="Analyst role")
+        self.pm.register_permission_set(ps)
+
+        # User with analyst role should be able to call both tools
+        wrapper = self.middleware.check_and_wrap("analyst", "jira_add_comment")(
+            lambda: "result"
+        )
+        result = wrapper()
+        assert result == "result"
+
+        wrapper = self.middleware.check_and_wrap("analyst", "jira_remove_comment")(
+            lambda: "result"
+        )
+        result = wrapper()
+        assert result == "result"
+
+    def test_reversible_tool_without_permission_denied(self):
+        """Reversible tool denied if reversible partner lacks permission."""
+        from src.utils.types import ToolMetadata
+
+        # Register tools with reversible relationship
+        add_comment = ToolMetadata(
+            tool_name="jira_add_comment",
+            description="Add comment to Jira ticket",
+            function=lambda: None,
+            reverses_tool="jira_remove_comment",
+        )
+        remove_comment = ToolMetadata(
+            tool_name="jira_remove_comment",
+            description="Remove comment from Jira ticket",
+            function=lambda: None,
+        )
+
+        self.tr.register(add_comment)
+        self.tr.register(remove_comment)
+
+        # Also register in permission model to populate reversible map
+        pm = self.pm
+        pm.register_tool(add_comment)
+        pm.register_tool(remove_comment)
+
+        # Only add permission for add_comment, not remove_comment
+        perms = [
+            Permission(tool_name="jira_add_comment", function="add", access_type="write"),
+        ]
+        ps = PermissionSet(name="analyst", permissions=perms, description="Analyst role")
+        pm.register_permission_set(ps)
+
+        # User should NOT be able to call add_comment since reversible tool lacks permission
+        wrapper = self.middleware.check_and_wrap("analyst", "jira_add_comment")(
+            lambda: "result"
+        )
+        try:
+            wrapper()
+            assert False, "Should have raised AccessControlError"
+        except AccessControlError:
+            pass  # Expected
+
 
 class TestPermissionDenied:
     """Test PermissionDenied exception."""

@@ -52,6 +52,9 @@ class AccessControlMiddleware:
         Checks if the user's permission set allows calling the tool,
         and raises AccessControlError if not (deny-by-default).
 
+        Also considers reversible tool relationships - if a tool reverses
+        another tool, permission for one implies access to the reversible.
+
         Args:
             user_perm_set_name: Name of the user's permission set.
             tool_name: Name of the tool being called.
@@ -63,7 +66,7 @@ class AccessControlMiddleware:
         def decorator(func):
             @wraps(func)
             def wrapper(*args, **kwargs):
-                # Deny-by-default check
+                # Deny-by-default check, including reversible relationship
                 if not self.pm.has_permission(
                     user_perm_set_name, tool_name, function
                 ):
@@ -98,7 +101,7 @@ class AccessControlMiddleware:
             Result of the tool function if permission granted,
             raises AccessControlError otherwise.
         """
-        # Deny-by-default check first
+        # Deny-by-default check first (includes reversible relationship)
         if not self.pm.has_permission(user_perm_set_name, tool_name, function):
             raise AccessControlError(
                 f"Permission denied: user '{user_perm_set_name}' "

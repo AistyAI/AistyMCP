@@ -1,5 +1,10 @@
 # SecureMCP
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python Version](https://img.shields.io/pypi/pyversions/secure-mcp.svg)](https://pypi.org/project/secure-mcp/)
+[![PyPI Version](https://img.shields.io/pypi/v/secure-mcp.svg)](https://pypi.org/project/secure-mcp/)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/your-repo/secure-mcp/actions)
+
 **Fine-grained permission control for Model Context Protocol (MCP) servers with reversible action support.**
 
 SecureMCP is a Python framework that enables companies to define explicit permission sets for AI agents, following a **deny-by-default** security model. Instead of giving users access to all tools, only explicitly permitted tools are available - preventing accidental or unauthorized tool usage.
@@ -283,6 +288,91 @@ secureMCP/
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Real-World Use Cases
+
+### Jira Ticket Management
+Every comment added to a Jira ticket can be instantly removed:
+
+```python
+tr.register(ToolMetadata(
+    tool_name="jira_add_comment",
+    description="Add comment to Jira ticket",
+    function=lambda ticket_id, body: f"Comment added",
+    required_permissions={"write:jira"},
+    reverses_tool="jira_remove_comment",
+))
+
+tr.register(ToolMetadata(
+    tool_name="jira_remove_comment",
+    description="Remove comment from Jira ticket",
+    function=lambda comment_id: f"Comment removed",
+    required_permissions={"write:jira"},
+    reverses_tool="jira_add_comment",
+))
+
+# Analyst can both add and remove comments
+analyst = UserContext(user_id="analyst1", perm_set_name="analyst")
+analyst_server = MCPServer.create_composite_server(analyst)
+# {"jira_add_comment": ..., "jira_remove_comment": ...}
+```
+
+### Cloud Instance Lifecycle
+Spin up and spin down actions form a reversible pair:
+
+```python
+tr.register(ToolMetadata(
+    tool_name="cloud_spin_up",
+    description="Spin up a cloud instance",
+    function=lambda config: f"Instance running",
+    required_permissions={"cloud:manage"},
+    is_destructive=True,
+    reverses_tool="cloud_spin_down",
+))
+
+tr.register(ToolMetadata(
+    tool_name="cloud_spin_down",
+    description="Spin down a cloud instance",
+    function=lambda instance_id: f"Instance stopped",
+    required_permissions={"cloud:manage"},
+    is_destructive=True,
+    reverses_tool="cloud_spin_up",
+))
+
+# Operator can manage instances but must have permission for both directions
+operator = UserContext(user_id="op1", perm_set_name="operator")
+```
+
+### Build & Deploy Pipeline
+Compile and rollback form a reversible pair:
+
+```python
+tr.register(ToolMetadata(
+    tool_name="build_image",
+    description="Build Docker image",
+    function=lambda source: f"Image built",
+    required_permissions={"build:image"},
+    reverses_tool="rollback_image",
+))
+
+tr.register(ToolMetadata(
+    tool_name="rollback_image",
+    description="Rollback to previous image",
+    function=lambda version: f"Rolled back to {version}",
+    required_permissions={"build:image"},
+    reverses_tool="build_image",
+))
+```
+
+### Permission Enforcement
+The reversible relationship is enforced at the permission level:
+
+```python
+# If user has permission to add comments but not remove:
+perms = [Permission(tool_name="jira_add_comment", function="add", access_type="write")]
+# User IS denied access to jira_add_comment because jira_remove_comment lacks permission
+# This ensures every action can be safely undone by an authorized operator
+```
 
 ## Security Contact
 

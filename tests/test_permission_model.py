@@ -1,9 +1,9 @@
-"""Tests for SecureMCP permission model."""
+"""Tests for AistyMCP permission model."""
 
 import pytest
-from src.permission_model import PermissionModel, PermissionSet, Permission
-from src.utils.types import ToolMetadata
-from src.utils.validation import validate_tool_name, validate_permission_set
+from aistymcp.permission_model import PermissionModel, PermissionSet, Permission
+from aistymcp.utils.types import ToolMetadata
+from aistymcp.utils.validation import validate_tool_name, validate_permission_set
 
 
 class TestValidateToolName:
@@ -110,7 +110,7 @@ class TestPermissionModel:
 
     def test_register_and_lookup_tool(self):
         """Register tool and lookup metadata."""
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         meta = ToolMetadata(
             tool_name="search",
@@ -204,6 +204,13 @@ class TestPermissionModel:
 
     def test_composite_server_tools(self):
         """Generate composite server with only allowed tools."""
+        from aistymcp.utils.types import ToolMetadata
+
+        for name in ("tool1", "tool2", "tool3"):
+            self.pm.register_tool(ToolMetadata(
+                tool_name=name, description=name, function=lambda: None
+            ))
+
         perms = [
             Permission(tool_name="tool1", function="read", access_type="read"),
             Permission(tool_name="tool2", function="write", access_type="write"),
@@ -211,14 +218,23 @@ class TestPermissionModel:
         ps = PermissionSet(name="analyst", permissions=perms, description="Analyst role")
         self.pm.register_permission_set(ps)
 
-        # Mock tool registry
         allowed = self.pm.composite_server_tools("analyst")
-        assert "tool1" in allowed
-        assert "tool2" in allowed
+        assert set(allowed) == {"tool1", "tool2"}
+
+    def test_composite_server_omits_tools_with_no_metadata(self):
+        """A tool that cannot be described cannot be invoked, so omit it."""
+        ps = PermissionSet(
+            name="analyst",
+            permissions=[Permission(tool_name="never_registered")],
+            description="",
+        )
+        self.pm.register_permission_set(ps)
+
+        assert self.pm.composite_server_tools("analyst") == {}
 
     def test_get_tool_metadata(self):
         """Get tool metadata from registry."""
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         meta = ToolMetadata(
             tool_name="search",
@@ -237,7 +253,7 @@ class TestPermissionModel:
 
     def test_has_permission_with_reversible(self):
         """Has permission checks reversible tool relationship."""
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         # Register tools with reversible relationship
         add_comment = ToolMetadata(
@@ -268,32 +284,89 @@ class TestPermissionModel:
         assert self.pm.has_permission("analyst", "jira_add_comment") is True
         assert self.pm.has_permission("analyst", "jira_remove_comment") is True
 
-    def test_has_permission_reversible_without_permission(self):
-        """Has permission fails if reversible tool lacks permission."""
-        from src.utils.types import ToolMetadata
+    def test_granting_a_tool_does_not_grant_its_undo(self):
+        """A reversible relationship alone grants nothing extra.
 
-        # Register tools with reversible relationship
-        add_comment = ToolMetadata(
-            tool_name="jira_add_comment",
-            description="Add comment to Jira ticket",
+        This is the core promise: an operator can enable "create" while
+        leaving "delete" switched off, even though delete undoes create.
+        """
+        from aistymcp.utils.types import ToolMetadata
+
+        self.pm.register_tool(ToolMetadata(
+            tool_name="jira_create_ticket",
+            description="Create a Jira ticket",
             function=lambda: None,
-            reverses_tool="jira_remove_comment",
-        )
-        remove_comment = ToolMetadata(
-            tool_name="jira_remove_comment",
-            description="Remove comment from Jira ticket",
+            reverses_tool="jira_delete_ticket",
+        ))
+        self.pm.register_tool(ToolMetadata(
+            tool_name="jira_delete_ticket",
+            description="Delete a Jira ticket",
             function=lambda: None,
-        )
+            is_destructive=True,
+        ))
 
-        self.pm.register_tool(add_comment)
-        self.pm.register_tool(remove_comment)
+        self.pm.register_permission_set(PermissionSet(
+            name="analyst",
+            permissions=[Permission(tool_name="jira_create_ticket")],
+            description="Can create tickets only",
+        ))
 
-        # Only add permission for add_comment, not remove_comment
-        perms = [
-            Permission(tool_name="jira_add_comment", function="add", access_type="write"),
+        assert self.pm.has_permission("analyst", "jira_create_ticket") is True
+        assert self.pm.has_permission("analyst", "jira_delete_ticket") is False
+        assert self.pm.get_allowed_tools("analyst") == ["jira_create_ticket"]
+
+    def test_grant_reverse_opts_in_to_the_undo_tool(self):
+        """grant_reverse=True extends a grant to the declared undo tool."""
+        from aistymcp.utils.types import ToolMetadata
+
+        self.pm.register_tool(ToolMetadata(
+            tool_name="cloud_spin_up",
+            description="Spin up an instance",
+            function=lambda: None,
+            reverses_tool="cloud_spin_down",
+        ))
+        self.pm.register_tool(ToolMetadata(
+            tool_name="cloud_spin_down",
+            description="Spin down an instance",
+            function=lambda: None,
+        ))
+
+        self.pm.register_permission_set(PermissionSet(
+            name="operator",
+            permissions=[Permission(tool_name="cloud_spin_up")],
+            description="May spin instances up, and undo that",
+            grant_reverse=True,
+        ))
+
+        assert self.pm.has_permission("operator", "cloud_spin_up") is True
+        assert self.pm.has_permission("operator", "cloud_spin_down") is True
+        assert self.pm.get_allowed_tools("operator") == [
+            "cloud_spin_down",
+            "cloud_spin_up",
         ]
-        ps = PermissionSet(name="analyst", permissions=perms, description="Analyst role")
-        self.pm.register_permission_set(ps)
 
-        # User should NOT have permission for add_comment since reversible tool lacks permission
-        assert self.pm.has_permission("analyst", "jira_add_comment") is False
+    def test_grant_reverse_is_directional(self):
+        """grant_reverse does not grant the tool an undo tool undoes."""
+        from aistymcp.utils.types import ToolMetadata
+
+        self.pm.register_tool(ToolMetadata(
+            tool_name="cloud_spin_up",
+            description="Spin up an instance",
+            function=lambda: None,
+            reverses_tool="cloud_spin_down",
+        ))
+        self.pm.register_tool(ToolMetadata(
+            tool_name="cloud_spin_down",
+            description="Spin down an instance",
+            function=lambda: None,
+        ))
+
+        self.pm.register_permission_set(PermissionSet(
+            name="downer",
+            permissions=[Permission(tool_name="cloud_spin_down")],
+            description="May only spin down",
+            grant_reverse=True,
+        ))
+
+        assert self.pm.has_permission("downer", "cloud_spin_down") is True
+        assert self.pm.has_permission("downer", "cloud_spin_up") is False

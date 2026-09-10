@@ -1,14 +1,14 @@
-"""Tests for SecureMCP access control middleware."""
+"""Tests for AistyMCP access control middleware."""
 
 import pytest
-from src.access_control import (
+from aistymcp.access_control import (
     AccessControlMiddleware,
     AccessControlError,
     PermissionDenied,
 )
-from src.permission_model import PermissionModel, PermissionSet, Permission
-from src.tool_registry import ToolRegistry, ToolMetadata
-from src.user_context import UserContext
+from aistymcp.permission_model import PermissionModel, PermissionSet, Permission
+from aistymcp.tool_registry import ToolRegistry, ToolMetadata
+from aistymcp.user_context import UserContext
 
 
 class TestAccessControlMiddleware:
@@ -142,7 +142,7 @@ class TestAccessControlMiddleware:
 
     def test_reversible_tool_permission(self):
         """Reversible tool permission check works correctly."""
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         # Register tools with reversible relationship
         add_comment = ToolMetadata(
@@ -182,47 +182,89 @@ class TestAccessControlMiddleware:
         result = wrapper()
         assert result == "result"
 
-    def test_reversible_tool_without_permission_denied(self):
-        """Reversible tool denied if reversible partner lacks permission."""
-        from src.utils.types import ToolMetadata
+    def test_undo_tool_stays_denied_without_an_explicit_grant(self):
+        """Granting a tool does not open its undo tool at the middleware."""
+        from aistymcp.utils.types import ToolMetadata
 
-        # Register tools with reversible relationship
-        add_comment = ToolMetadata(
-            tool_name="jira_add_comment",
-            description="Add comment to Jira ticket",
-            function=lambda: None,
-            reverses_tool="jira_remove_comment",
+        create = ToolMetadata(
+            tool_name="jira_create_ticket",
+            description="Create a Jira ticket",
+            function=lambda: "created",
+            reverses_tool="jira_delete_ticket",
         )
-        remove_comment = ToolMetadata(
-            tool_name="jira_remove_comment",
-            description="Remove comment from Jira ticket",
-            function=lambda: None,
+        delete = ToolMetadata(
+            tool_name="jira_delete_ticket",
+            description="Delete a Jira ticket",
+            function=lambda: "deleted",
+            is_destructive=True,
         )
 
-        self.tr.register(add_comment)
-        self.tr.register(remove_comment)
+        for meta in (create, delete):
+            self.tr.register(meta)
+            self.pm.register_tool(meta)
 
-        # Also register in permission model to populate reversible map
-        pm = self.pm
-        pm.register_tool(add_comment)
-        pm.register_tool(remove_comment)
+        self.pm.register_permission_set(PermissionSet(
+            name="analyst",
+            permissions=[Permission(tool_name="jira_create_ticket")],
+            description="Can create tickets only",
+        ))
 
-        # Only add permission for add_comment, not remove_comment
-        perms = [
-            Permission(tool_name="jira_add_comment", function="add", access_type="write"),
-        ]
-        ps = PermissionSet(name="analyst", permissions=perms, description="Analyst role")
-        pm.register_permission_set(ps)
+        assert self.middleware.call("analyst", "jira_create_ticket") == "created"
 
-        # User should NOT be able to call add_comment since reversible tool lacks permission
-        wrapper = self.middleware.check_and_wrap("analyst", "jira_add_comment")(
-            lambda: "result"
+        with pytest.raises(PermissionDenied):
+            self.middleware.call("analyst", "jira_delete_ticket")
+
+    def test_bound_wrapper_enforces_on_every_call(self):
+        """A bound wrapper re-checks permission rather than trusting setup."""
+        from aistymcp.utils.types import ToolMetadata
+
+        meta = ToolMetadata(
+            tool_name="search",
+            description="Search",
+            function=lambda q: "hit:" + q,
         )
-        try:
-            wrapper()
-            assert False, "Should have raised AccessControlError"
-        except AccessControlError:
-            pass  # Expected
+        self.tr.register(meta)
+        self.pm.register_tool(meta)
+
+        granted = PermissionSet(
+            name="analyst",
+            permissions=[Permission(tool_name="search")],
+            description="",
+        )
+        self.pm.register_permission_set(granted)
+
+        bound = self.middleware.bind_tool("analyst", "search")
+        assert bound.is_bound is True
+        assert bound("abc") == "hit:abc"
+
+        # Revoke the grant; the same wrapper must now refuse.
+        granted.permissions = []
+        with pytest.raises(PermissionDenied):
+            bound("abc")
+
+    def test_composite_server_omits_denied_tools(self):
+        """A composite server exposes only permitted tools, as callables."""
+        from aistymcp.utils.types import ToolMetadata
+
+        for name in ("allowed_tool", "denied_tool"):
+            meta = ToolMetadata(
+                tool_name=name,
+                description=name,
+                function=lambda n=name: n,
+            )
+            self.tr.register(meta)
+            self.pm.register_tool(meta)
+
+        self.pm.register_permission_set(PermissionSet(
+            name="analyst",
+            permissions=[Permission(tool_name="allowed_tool")],
+            description="",
+        ))
+
+        composite = self.middleware.composite_server_tools("analyst")
+
+        assert set(composite) == {"allowed_tool"}
+        assert composite["allowed_tool"]() == "allowed_tool"
 
 
 class TestPermissionDenied:
@@ -230,7 +272,7 @@ class TestPermissionDenied:
 
     def test_permission_denied_is_access_control_error(self):
         """PermissionDenied is subclass of AccessControlError."""
-        from src.access_control import PermissionDenied as PD
+        from aistymcp.access_control import PermissionDenied as PD
 
         assert issubclass(PD, Exception)
 

@@ -4,23 +4,38 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aistymcp"
-version = "1.0.0"
-description = "Fine-grained permission control for Model Context Protocol (MCP) servers with reversible action support"
-authors = [{name = "SecureMCP Contributors", email = "joe@example.com"}]
+version = "0.1.0"
+description = "Deny-by-default, per-tool permission control for Model Context Protocol servers"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "AistyAI"}]
+keywords = ["mcp", "model-context-protocol", "authorization", "rbac", "permissions"]
+dependencies = []
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
+    "Topic :: Security",
 ]
 
-[project.scripts]
-secure-mcp = "src:main"
+[project.urls]
+Homepage = "https://github.com/AistyAI/AistyMCP"
+Source = "https://github.com/AistyAI/AistyMCP"
+Issues = "https://github.com/AistyAI/AistyMCP/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
 
 [tool.setuptools.packages.find]
-where = ["src"]
-include = ["src", "src.*"]
+include = ["aistymcp", "aistymcp.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

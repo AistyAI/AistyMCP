@@ -1,9 +1,9 @@
-"""Tests for SecureMCP tool registry."""
+"""Tests for AistyMCP tool registry."""
 
 import pytest
-from src.tool_registry import ToolRegistry, ToolWrapper, ToolMetadata
-from src.utils.types import PermissionSet as PermSetCls
-from src.permission_model import PermissionSet as PM_PermissionSet
+from aistymcp.tool_registry import ToolRegistry, ToolWrapper, ToolMetadata
+from aistymcp.utils.types import PermissionSet as PermSetCls
+from aistymcp.permission_model import PermissionSet as PM_PermissionSet
 
 
 class TestToolRegistry:
@@ -15,7 +15,7 @@ class TestToolRegistry:
 
     def test_register_tool(self):
         """Register a tool in the registry."""
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         meta = ToolMetadata(
             tool_name="search",
@@ -27,7 +27,7 @@ class TestToolRegistry:
 
     def test_register_duplicate(self):
         """Registering duplicate tool raises ValueError."""
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         meta = ToolMetadata(
             tool_name="search",
@@ -43,7 +43,7 @@ class TestToolRegistry:
 
     def test_unregister_tool(self):
         """Unregister a tool."""
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         meta = ToolMetadata(
             tool_name="search",
@@ -56,7 +56,7 @@ class TestToolRegistry:
 
     def test_list_tools(self):
         """List all registered tools."""
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         # Register multiple tools
         for name in ["tool1", "tool2", "tool3"]:
@@ -75,7 +75,7 @@ class TestToolRegistry:
 
     def test_list_tools_with_permissions(self):
         """List tools with their required permissions."""
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         # Register tools with different permissions
         for name, perms in [("tool1", {"read"}), ("tool2", {"write"})]:
@@ -94,7 +94,7 @@ class TestToolRegistry:
 
     def test_get_tool_metadata(self):
         """Get tool metadata by name."""
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         meta = ToolMetadata(
             tool_name="search",
@@ -115,7 +115,7 @@ class TestToolRegistry:
         """Check if tool is registered."""
         assert self.tr.has_tool("nonexistent") is False
 
-        from src.utils.types import ToolMetadata
+        from aistymcp.utils.types import ToolMetadata
 
         meta = ToolMetadata(
             tool_name="search",

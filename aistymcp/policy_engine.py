@@ -1,4 +1,4 @@
-"""Policy engine for SecureMCP.
+"""Policy engine for AistyMCP.
 
 Provides role-based (RBAC) and relationship-based (ReBAC) access
 control policy evaluation. Supports contextual policies with time,
@@ -10,6 +10,29 @@ middleware uses to determine if a permission check passes or fails.
 
 from typing import Dict, List, Optional, Any, Set, Callable, Union
 from datetime import datetime, timedelta
+
+
+def _require_model(user_context: "UserContext"):
+    """Get the permission model a context resolves against.
+
+    Args:
+        user_context: The context to read the model from.
+
+    Returns:
+        The PermissionModel attached to the context.
+
+    Raises:
+        ValueError: If the context carries no permission model. Policy
+            evaluation cannot fall back to a default without silently
+            changing the answer, so it fails loudly instead.
+    """
+    model = getattr(user_context, "pm", None)
+    if model is None:
+        raise ValueError(
+            "UserContext has no permission model. Construct it with "
+            "UserContext(..., permission_model=pm) to use the policy engine."
+        )
+    return model
 
 
 class PolicyEngine:
@@ -104,7 +127,7 @@ class PolicyEngine:
         """
         permitted_sets = self._role_hierarchy.get(role_name, set())
         for perm_set_name in permitted_sets:
-            if user_context.pm.has_permission(
+            if _require_model(user_context).has_permission(
                 perm_set_name, tool_name, function
             ):
                 return True
@@ -149,7 +172,7 @@ class PolicyEngine:
         """
         permitted_sets = self._resource_permissions.get(resource_name, set())
         for perm_set_name in permitted_sets:
-            if user_context.pm.has_permission(
+            if _require_model(user_context).has_permission(
                 perm_set_name, tool_name, function
             ):
                 return True
@@ -277,7 +300,7 @@ class RBACPolicy(Policy):
         for role in user_roles:
             perm_sets = self._role_perm_map.get(role, set())
             for perm_set in perm_sets:
-                if user_context.pm.has_permission(
+                if _require_model(user_context).has_permission(
                     perm_set, tool_name, function
                 ):
                     return True

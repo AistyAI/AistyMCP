@@ -1,4 +1,4 @@
-"""Tool registry for SecureMCP.
+"""Tool registry for AistyMCP.
 
 Registers MCP tools with metadata and permission requirements.
 Supports tool discovery and validation.
@@ -110,9 +110,13 @@ class ToolRegistry:
 class ToolWrapper:
     """Wrapper that attaches access control to a tool function.
 
-    A ToolWrapper wraps a raw tool function with permission checking
-    logic. When invoked, it first checks if the caller has the required
-    permissions before executing the underlying function.
+    When bound to an access control middleware and a permission set (see
+    AccessControlMiddleware.bind_tool), every invocation is permission
+    checked before the underlying function runs.
+
+    An unbound wrapper performs no check and is only appropriate for
+    tools that have already been authorized by the caller. Prefer
+    `bind_tool` so that enforcement is not left to the call site.
     """
 
     def __init__(
@@ -121,6 +125,9 @@ class ToolWrapper:
         func: Any,
         required_permissions: Set[str],
         metadata: Optional[ToolMetadata] = None,
+        access_control: Any = None,
+        perm_set_name: Optional[str] = None,
+        function: Optional[str] = None,
     ):
         self.tool_name = tool_name
         self.func = func
@@ -130,21 +137,29 @@ class ToolWrapper:
             description="",
             function=lambda: None,
         )
+        self.access_control = access_control
+        self.perm_set_name = perm_set_name
+        self.function = function
+
+    @property
+    def is_bound(self) -> bool:
+        """Whether this wrapper enforces access control on call."""
+        return self.access_control is not None and self.perm_set_name is not None
 
     def __call__(self, *args, **kwargs) -> Any:
-        """Execute the tool function with permission check.
-
-        This method must be called within a context where permission
-        checking is available (e.g., via the access control middleware).
+        """Execute the tool function, checking permission when bound.
 
         Returns:
             Result of the underlying tool function.
 
         Raises:
-            PermissionError: If the caller does not have required permissions.
+            PermissionDenied: If bound and the permission set does not
+                grant this tool.
         """
-        # Permission check is handled by the access control layer
-        # This wrapper assumes checks have already passed
+        if self.is_bound:
+            self.access_control.authorize(
+                self.perm_set_name, self.tool_name, self.function
+            )
         return self.func(*args, **kwargs)
 
     def get_info(self) -> dict:
